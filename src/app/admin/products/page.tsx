@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,12 @@ export default async function ProductsPage() {
       <p className="text-sm text-muted-foreground">
         Ürünler; satış modeli (unit/meter/custom) ve product_type ayrı tutulur.
       </p>
+      <Link
+        href="/admin/products/new"
+        className="inline-flex items-center px-3 py-2 rounded bg-black text-white text-sm font-semibold"
+      >
+        + New Product
+      </Link>
       <div className="overflow-auto border rounded bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
