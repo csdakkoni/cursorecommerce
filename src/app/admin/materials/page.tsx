@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,12 @@ export default async function MaterialsPage() {
       <p className="text-sm text-muted-foreground">
         Kumaş tabanları. Ürünlerden ayrı; metre stokları bu materyale bağlı rollerde tutulur.
       </p>
+      <Link
+        href="/admin/materials/new"
+        className="inline-flex items-center px-3 py-2 rounded bg-black text-white text-sm font-semibold"
+      >
+        + New Material
+      </Link>
       <div className="overflow-auto border rounded bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">

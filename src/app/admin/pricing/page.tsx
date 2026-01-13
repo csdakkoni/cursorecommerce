@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { PricingRuleForm } from './forms/PricingRuleForm';
 import { CustomFormulaForm } from './forms/CustomFormulaForm';
+import { PricingForms } from '@/components/admin/PricingForms';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,8 @@ export default async function PricingPage() {
           Unit/meter/area fiyatları burada. Custom (perde) için formülü aşağıdan bağla.
         </p>
       </div>
+
+      <PricingForms />
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
