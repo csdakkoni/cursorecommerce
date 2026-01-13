@@ -1,121 +1,138 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { z } from 'zod';
-import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { IconPlus } from '@/components/ui/icons';
 
-const groupSchema = z.object({
-  product_id: z.string(),
-  name: z.string().min(1),
-  name_en: z.string().optional(),
-  type: z.enum(['select', 'radio', 'color_swatch', 'size_grid']).default('select'),
-  is_required: z.boolean().default(true),
-  affects_price: z.boolean().default(true),
-  sort_order: z.number().int().default(0)
-});
+interface Props {
+  productId: string;
+}
 
-export function OptionGroupForm({ productId, onAdded }: { productId: string; onAdded?: () => void }) {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+export function OptionGroupForm({ productId }: Props) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    name_en: '',
-    type: 'select',
+    type: 'select' as 'select' | 'radio' | 'color_swatch' | 'size_grid',
+    affects_price: false,
     is_required: true,
-    affects_price: true,
-    sort_order: 0
+    sort_order: 0,
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    setError(null);
-    const parsed = groupSchema.safeParse({ ...form, product_id: productId });
-    if (!parsed.success) {
-      setError('Eksik veya hatalı alan var');
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    
     setLoading(true);
-    const { error } = await supabase.from('product_option_groups').insert(parsed.data);
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      const res = await fetch('/api/admin/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'group',
+          data: {
+            product_id: productId,
+            name: form.name,
+            type: form.type,
+            affects_price: form.affects_price,
+            is_required: form.is_required,
+            sort_order: form.sort_order,
+          },
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to create option group');
+        return;
+      }
+      
       setForm({
         name: '',
-        name_en: '',
         type: 'select',
+        affects_price: false,
         is_required: true,
-        affects_price: true,
-        sort_order: 0
+        sort_order: 0,
       });
-      onAdded?.();
+      router.refresh();
+    } catch {
+      alert('Error creating option group');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="space-y-2 border rounded p-3">
-      <div className="flex gap-2">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="form-group">
+        <label className="label">Group Name</label>
         <input
-          className="input flex-1"
-          placeholder="Grup adı"
+          type="text"
+          className="input"
           value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        />
-        <input
-          className="input flex-1"
-          placeholder="Grup adı EN"
-          value={form.name_en}
-          onChange={(e) => setForm((f) => ({ ...f, name_en: e.target.value }))}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="e.g., Color, Size, Fabric Type"
+          required
         />
       </div>
-      <div className="flex gap-2 text-sm">
-        <label className="flex items-center gap-1">
-          <span>Tip</span>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="form-group">
+          <label className="label">Type</label>
           <select
             className="input"
             value={form.type}
-            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+            onChange={(e) => setForm({ ...form, type: e.target.value as 'select' | 'radio' | 'color_swatch' | 'size_grid' })}
           >
-            <option value="select">Select</option>
-            <option value="radio">Radio</option>
-            <option value="color_swatch">Color swatch</option>
-            <option value="size_grid">Size grid</option>
+            <option value="select">Select (Dropdown)</option>
+            <option value="color_swatch">Color Swatch</option>
+            <option value="size_grid">Size Grid</option>
+            <option value="radio">Radio Buttons</option>
           </select>
-        </label>
-        <label className="inline-flex items-center gap-1">
+        </div>
+
+        <div className="form-group">
+          <label className="label">Sort Order</label>
           <input
-            type="checkbox"
-            checked={form.is_required}
-            onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))}
+            type="number"
+            className="input"
+            value={form.sort_order}
+            onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })}
+            min="0"
           />
-          <span>Zorunlu</span>
-        </label>
-        <label className="inline-flex items-center gap-1">
+        </div>
+      </div>
+
+      <div className="flex items-center gap-6">
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={form.affects_price}
-            onChange={(e) => setForm((f) => ({ ...f, affects_price: e.target.checked }))}
+            onChange={(e) => setForm({ ...form, affects_price: e.target.checked })}
+            className="w-4 h-4 rounded border-[var(--border)] text-[var(--primary)]"
           />
-          <span>Fiyat etkiler</span>
+          <span className="text-sm">Affects Price</span>
         </label>
-        <label className="inline-flex items-center gap-1">
-          <span>Sıra</span>
+
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
-            className="input w-16"
-            type="number"
-            value={form.sort_order}
-            onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))}
+            type="checkbox"
+            checked={form.is_required}
+            onChange={(e) => setForm({ ...form, is_required: e.target.checked })}
+            className="w-4 h-4 rounded border-[var(--border)] text-[var(--primary)]"
           />
+          <span className="text-sm">Required</span>
         </label>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        className="px-3 py-2 bg-black text-white rounded text-sm"
-        onClick={submit}
-        disabled={loading}
-      >
-        {loading ? 'Kaydediliyor...' : 'Grup Ekle'}
+
+      <button type="submit" className="btn btn-primary" disabled={loading}>
+        {loading ? 'Creating...' : (
+          <>
+            <IconPlus className="w-4 h-4" />
+            Add Group
+          </>
+        )}
       </button>
-    </div>
+    </form>
   );
 }

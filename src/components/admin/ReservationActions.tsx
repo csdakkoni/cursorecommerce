@@ -1,48 +1,57 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-export function ReservationActions({ reservationId }: { reservationId: string }) {
+interface Props {
+  reservationId: string;
+}
+
+export function ReservationActions({ reservationId }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState<'release' | 'consume' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
 
-  async function call(action: 'release' | 'consume') {
+  const handleAction = async (action: 'release' | 'consume') => {
     setLoading(action);
-    setError(null);
-    setDone(null);
-    const res = await fetch(`/api/admin/stock/${action}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reservation_id: reservationId })
-    });
-    setLoading(null);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Hata');
-    } else {
-      setDone(action);
+    try {
+      const res = await fetch(`/api/admin/stock/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservation_id: reservationId }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || `Failed to ${action} reservation`);
+        return;
+      }
+      
+      router.refresh();
+    } catch {
+      alert(`Error: Failed to ${action} reservation`);
+    } finally {
+      setLoading(null);
     }
-  }
+  };
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-1">
       <button
-        className="px-2 py-1 rounded border border-amber-400 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-        onClick={() => call('release')}
+        onClick={() => handleAction('release')}
         disabled={loading !== null}
+        className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50"
+        title="Release stock back to inventory"
       >
         {loading === 'release' ? '...' : 'Release'}
       </button>
       <button
-        className="px-2 py-1 rounded border border-green-500 text-green-700 hover:bg-green-50 disabled:opacity-50"
-        onClick={() => call('consume')}
+        onClick={() => handleAction('consume')}
         disabled={loading !== null}
+        className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors disabled:opacity-50"
+        title="Mark as consumed (reduce total stock)"
       >
         {loading === 'consume' ? '...' : 'Consume'}
       </button>
-      {error && <span className="text-red-600">{error}</span>}
-      {done && <span className="text-green-600">ok</span>}
     </div>
   );
 }

@@ -1,134 +1,138 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { z } from 'zod';
-import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { IconPlus } from '@/components/ui/icons';
 
-const valueSchema = z.object({
-  option_group_id: z.string(),
-  value: z.string().min(1),
-  value_en: z.string().optional(),
-  price_modifier: z.number().optional(),
-  price_modifier_percent: z.number().optional(),
-  hex_color: z.string().optional(),
-  is_default: z.boolean().optional(),
-  is_available: z.boolean().optional(),
-  sort_order: z.number().int().optional()
-});
+interface Props {
+  groupId: string;
+}
 
-export function OptionValueForm({ groupId, onAdded }: { groupId: string; onAdded?: () => void }) {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+export function OptionValueForm({ groupId }: Props) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     value: '',
     value_en: '',
-    price_modifier: 0,
-    price_modifier_percent: 0,
     hex_color: '',
-    is_default: false,
-    is_available: true,
-    sort_order: 0
+    price_modifier: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    setError(null);
-    const parsed = valueSchema.safeParse({ ...form, option_group_id: groupId });
-    if (!parsed.success) {
-      setError('Eksik veya hatalı alan var');
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.value.trim()) return;
+    
     setLoading(true);
-    const { error } = await supabase.from('product_option_values').insert(parsed.data);
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setForm({
-        value: '',
-        value_en: '',
-        price_modifier: 0,
-        price_modifier_percent: 0,
-        hex_color: '',
-        is_default: false,
-        is_available: true,
-        sort_order: 0
+    try {
+      const res = await fetch('/api/admin/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'value',
+          data: {
+            option_group_id: groupId,
+            value: form.value,
+            value_en: form.value_en || undefined,
+            hex_color: form.hex_color || undefined,
+            price_modifier: form.price_modifier ? parseFloat(form.price_modifier) : undefined,
+          },
+        }),
       });
-      onAdded?.();
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to create option value');
+        return;
+      }
+      
+      setForm({ value: '', value_en: '', hex_color: '', price_modifier: '' });
+      setShowForm(false);
+      router.refresh();
+    } catch {
+      alert('Error creating option value');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  if (!showForm) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowForm(true)}
+        className="text-sm text-[var(--primary)] hover:text-[var(--primary-hover)] flex items-center gap-1"
+      >
+        <IconPlus className="w-3 h-3" />
+        Add Value
+      </button>
+    );
   }
 
   return (
-    <div className="space-y-2 border rounded p-3">
-      <div className="flex gap-2">
-        <input
-          className="input flex-1"
-          placeholder="Value"
-          value={form.value}
-          onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-        />
-        <input
-          className="input flex-1"
-          placeholder="Value EN"
-          value={form.value_en}
-          onChange={(e) => setForm((f) => ({ ...f, value_en: e.target.value }))}
-        />
-      </div>
-      <div className="flex gap-2">
-        <input
-          className="input"
-          type="number"
-          placeholder="Price +"
-          value={form.price_modifier}
-          onChange={(e) => setForm((f) => ({ ...f, price_modifier: Number(e.target.value) }))}
-        />
-        <input
-          className="input"
-          type="number"
-          placeholder="Price +%"
-          value={form.price_modifier_percent}
-          onChange={(e) => setForm((f) => ({ ...f, price_modifier_percent: Number(e.target.value) }))}
-        />
-        <input
-          className="input"
-          placeholder="#hex"
-          value={form.hex_color}
-          onChange={(e) => setForm((f) => ({ ...f, hex_color: e.target.value }))}
-        />
-        <input
-          className="input"
-          type="number"
-          placeholder="Sort"
-          value={form.sort_order}
-          onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))}
-        />
-      </div>
-      <div className="flex gap-4 text-sm">
-        <label className="inline-flex items-center gap-1">
+    <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
           <input
-            type="checkbox"
-            checked={form.is_default}
-            onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.checked }))}
+            type="text"
+            className="input text-sm"
+            value={form.value}
+            onChange={(e) => setForm({ ...form, value: e.target.value })}
+            placeholder="Value (TR)"
+            required
           />
-          <span>Default</span>
-        </label>
-        <label className="inline-flex items-center gap-1">
+        </div>
+        <div>
           <input
-            type="checkbox"
-            checked={form.is_available}
-            onChange={(e) => setForm((f) => ({ ...f, is_available: e.target.checked }))}
+            type="text"
+            className="input text-sm"
+            value={form.value_en}
+            onChange={(e) => setForm({ ...form, value_en: e.target.value })}
+            placeholder="Value (EN)"
           />
-          <span>Available</span>
-        </label>
+        </div>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        className="px-3 py-2 bg-black text-white rounded text-sm"
-        onClick={submit}
-        disabled={loading}
-      >
-        {loading ? 'Kaydediliyor...' : 'Ekle'}
-      </button>
-    </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={form.hex_color || '#ffffff'}
+            onChange={(e) => setForm({ ...form, hex_color: e.target.value })}
+            className="w-8 h-8 rounded cursor-pointer border border-[var(--border)]"
+          />
+          <input
+            type="text"
+            className="input text-sm flex-1"
+            value={form.hex_color}
+            onChange={(e) => setForm({ ...form, hex_color: e.target.value })}
+            placeholder="#FFFFFF"
+          />
+        </div>
+        <div>
+          <input
+            type="number"
+            className="input text-sm"
+            value={form.price_modifier}
+            onChange={(e) => setForm({ ...form, price_modifier: e.target.value })}
+            placeholder="Price modifier"
+            step="0.01"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+          {loading ? '...' : 'Add'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowForm(false)}
+          className="btn btn-secondary btn-sm"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

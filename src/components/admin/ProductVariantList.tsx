@@ -1,125 +1,211 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
-import { z } from 'zod';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { IconEdit, IconTrash, IconPlus } from '@/components/ui/icons';
 
-const schema = z.object({
-  id: z.string().uuid(),
-  sku: z.string().optional(),
-  stock: z.number().int().nonnegative().optional(),
-  price_override: z.number().nonnegative().nullable().optional(),
-  is_available: z.boolean().optional()
-});
+interface Variant {
+  id: string;
+  sku: string;
+  options: Record<string, string>;
+  stock_qty: number;
+  price_override: number | null;
+}
 
-export function ProductVariantList({ productId }: { productId: string }) {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [variants, setVariants] = useState<any[]>([]);
+interface Props {
+  productId: string;
+}
+
+export function ProductVariantList({ productId }: Props) {
+  const router = useRouter();
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('product_variants')
-      .select('*')
-      .eq('product_id', productId)
-      .order('created_at', { ascending: true });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setVariants(data || []);
-  }
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ stock_qty: 0, price_override: '' });
 
   useEffect(() => {
-    load();
+    fetch(`/api/admin/variants?product_id=${productId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setVariants(data.data || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [productId]);
 
-  async function update(id: string, updates: any) {
-    const parsed = schema.partial().safeParse({ id, ...updates });
-    if (!parsed.success) {
-      setError('Geçersiz alan');
-      return;
+  const handleEdit = (variant: Variant) => {
+    setEditingId(variant.id);
+    setEditForm({
+      stock_qty: variant.stock_qty,
+      price_override: variant.price_override?.toString() || '',
+    });
+  };
+
+  const handleSave = async (id: string) => {
+    try {
+      const res = await fetch('/api/admin/variants', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          stock_qty: editForm.stock_qty,
+          price_override: editForm.price_override ? parseFloat(editForm.price_override) : null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to update');
+        return;
+      }
+
+      setEditingId(null);
+      router.refresh();
+      // Refresh variants list
+      const refreshRes = await fetch(`/api/admin/variants?product_id=${productId}`);
+      const refreshData = await refreshRes.json();
+      setVariants(refreshData.data || []);
+    } catch {
+      alert('Error updating variant');
     }
-    const { error } = await supabase.from('product_variants').update(parsed.data).eq('id', id);
-    if (error) setError(error.message);
-    else load();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this variant?')) return;
+
+    try {
+      const res = await fetch(`/api/admin/variants?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete');
+        return;
+      }
+
+      setVariants(variants.filter((v) => v.id !== id));
+    } catch {
+      alert('Error deleting variant');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  async function remove(id: string) {
-    if (!confirm('Silinsin mi?')) return;
-    const { error } = await supabase.from('product_variants').delete().eq('id', id);
-    if (error) setError(error.message);
-    else setVariants((v) => v.filter((x) => x.id !== id));
+  if (variants.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-[var(--muted)] mb-4">No variants created yet.</p>
+        <p className="text-sm text-[var(--muted)]">
+          Variants are automatically created based on option combinations, or you can add them manually.
+        </p>
+      </div>
+    );
   }
-
-  if (loading) return <div className="text-sm text-muted-foreground">Varyantlar yükleniyor...</div>;
-  if (error) return <div className="text-sm text-red-600">{error}</div>;
 
   return (
-    <div className="border rounded p-3 bg-white space-y-2">
-      <div className="text-sm font-semibold">Varyantlar</div>
-      {variants.length === 0 && <div className="text-xs text-muted-foreground">Varyant yok.</div>}
-      <div className="space-y-2">
-        {variants.map((v) => (
-          <div key={v.id} className="border rounded p-2 text-sm flex flex-col gap-1">
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(v.option_combination || {}).map(([k, val]) => (
-                <span
-                  key={k}
-                  className="px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-xs border border-purple-200"
-                >
-                  {k}: {val as string}
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2 items-center flex-wrap">
-              <label className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">SKU</span>
-                <input
-                  className="input h-8"
-                  value={v.sku || ''}
-                  onChange={(e) => update(v.id, { sku: e.target.value })}
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Stock</span>
-                <input
-                  className="input h-8 w-20"
-                  type="number"
-                  value={v.stock ?? 0}
-                  onChange={(e) => update(v.id, { stock: Number(e.target.value) })}
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Price override</span>
-                <input
-                  className="input h-8 w-24"
-                  type="number"
-                  value={v.price_override ?? ''}
-                  onChange={(e) =>
-                    update(v.id, { price_override: e.target.value === '' ? null : Number(e.target.value) })
-                  }
-                  placeholder="boş = ürün fiyatı"
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Active</span>
-                <input
-                  type="checkbox"
-                  checked={v.is_available}
-                  onChange={(e) => update(v.id, { is_available: e.target.checked })}
-                />
-              </label>
-              <button
-                className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50"
-                onClick={() => remove(v.id)}
-              >
-                Sil
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="overflow-x-auto">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Options</th>
+            <th>Stock</th>
+            <th>Price Override</th>
+            <th className="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map((variant) => (
+            <tr key={variant.id}>
+              <td className="font-mono text-sm">{variant.sku}</td>
+              <td>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(variant.options || {}).map(([key, value]) => (
+                    <span key={key} className="badge badge-gray text-xs">
+                      {key}: {value}
+                    </span>
+                  ))}
+                </div>
+              </td>
+              <td>
+                {editingId === variant.id ? (
+                  <input
+                    type="number"
+                    className="input w-20 text-sm py-1"
+                    value={editForm.stock_qty}
+                    onChange={(e) => setEditForm({ ...editForm, stock_qty: parseInt(e.target.value) || 0 })}
+                    min="0"
+                  />
+                ) : (
+                  <span className={variant.stock_qty < 10 ? 'text-red-600 font-medium' : ''}>
+                    {variant.stock_qty}
+                  </span>
+                )}
+              </td>
+              <td>
+                {editingId === variant.id ? (
+                  <input
+                    type="number"
+                    className="input w-24 text-sm py-1"
+                    value={editForm.price_override}
+                    onChange={(e) => setEditForm({ ...editForm, price_override: e.target.value })}
+                    placeholder="Default"
+                    step="0.01"
+                  />
+                ) : (
+                  <span>
+                    {variant.price_override ? `$${variant.price_override}` : '-'}
+                  </span>
+                )}
+              </td>
+              <td>
+                <div className="flex items-center justify-end gap-1">
+                  {editingId === variant.id ? (
+                    <>
+                      <button
+                        onClick={() => handleSave(variant.id)}
+                        className="btn btn-success btn-sm"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleEdit(variant)}
+                        className="btn btn-ghost btn-sm"
+                        title="Edit"
+                      >
+                        <IconEdit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(variant.id)}
+                        className="btn btn-ghost btn-sm text-red-500 hover:text-red-600"
+                        title="Delete"
+                      >
+                        <IconTrash className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

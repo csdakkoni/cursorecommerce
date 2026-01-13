@@ -1,141 +1,180 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { PricingRuleForm } from './forms/PricingRuleForm';
-import { CustomFormulaForm } from './forms/CustomFormulaForm';
-import { PricingForms } from '@/components/admin/PricingForms';
+import Link from 'next/link';
+import { IconPricing, IconPlus, IconEdit } from '@/components/ui/icons';
 
 export const dynamic = 'force-dynamic';
 
-async function getPricing() {
-  const { data, error } = await supabaseAdmin
+async function getPricingRules() {
+  const { data } = await supabaseAdmin
     .from('pricing_rules')
-    .select('*, product:product_id(title, sales_model)')
+    .select('*, products(name)')
     .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return data || [];
 }
 
 async function getCustomFormulas() {
-  const { data, error } = await supabaseAdmin
+  const { data } = await supabaseAdmin
     .from('custom_pricing_formulas')
-    .select('*, product:product_id(title)')
+    .select('*, products(name)')
     .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return data || [];
 }
 
+async function getProducts() {
+  const { data } = await supabaseAdmin
+    .from('products')
+    .select('id, name')
+    .order('name');
+  return data || [];
+}
+
+const pricingTypeLabels: Record<string, string> = {
+  unit: 'Per Unit',
+  meter: 'Per Meter',
+  area: 'Per Area',
+  custom_formula: 'Custom Formula',
+};
+
+const pricingTypeColors: Record<string, string> = {
+  unit: 'badge-info',
+  meter: 'badge-success',
+  area: 'badge-warning',
+  custom_formula: 'badge-primary',
+};
+
 export default async function PricingPage() {
-  const [rules, formulas] = await Promise.all([getPricing(), getCustomFormulas()]);
+  const [pricingRules, customFormulas, products] = await Promise.all([
+    getPricingRules(),
+    getCustomFormulas(),
+    getProducts(),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Pricing Rules</h1>
-        <p className="text-sm text-muted-foreground">
-          Unit/meter/area fiyatları burada. Custom (perde) için formülü aşağıdan bağla.
-        </p>
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <p className="text-[var(--muted)]">Configure product pricing rules and custom formulas</p>
+        </div>
       </div>
 
-      <PricingForms />
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pricing Rules */}
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <div>
+              <h3 className="card-title">Pricing Rules</h3>
+              <p className="card-description">Base pricing configurations</p>
+            </div>
+            <Link href="/admin/pricing/rules/new" className="btn btn-primary btn-sm">
+              <IconPlus className="w-4 h-4" />
+              Add Rule
+            </Link>
+          </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <div className="text-sm font-semibold">Ekle / Güncelle</div>
-          <p className="text-xs text-muted-foreground">
-            Form kaydedildikten sonra listeyi yenilemek için sayfayı tazele.
-          </p>
-          {rules[0]?.product_id ? (
-            <PricingRuleForm productId={rules[0].product_id} />
+          {pricingRules.length === 0 ? (
+            <div className="empty-state py-8">
+              <div className="empty-state-icon">
+                <IconPricing className="w-6 h-6" />
+              </div>
+              <p className="empty-state-title text-sm">No pricing rules</p>
+              <p className="empty-state-description text-xs">Create rules to define how products are priced</p>
+            </div>
           ) : (
-            <div className="text-xs text-muted-foreground">Örnek: product_id girilmiş bir ürün yok; form için product id lazım.</div>
+            <div className="divide-y divide-[var(--border)]">
+              {pricingRules.map((rule) => (
+                <div key={rule.id} className="px-6 py-4 hover:bg-[var(--background)] transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-[var(--foreground)] truncate">
+                        {(rule.products as { name?: string })?.name || 'Unknown Product'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`badge ${pricingTypeColors[rule.pricing_type] || 'badge-gray'}`}>
+                          {pricingTypeLabels[rule.pricing_type] || rule.pricing_type}
+                        </span>
+                        <span className="text-sm text-[var(--muted)]">
+                          ${Number(rule.base_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                    <Link href={`/admin/pricing/rules/${rule.id}/edit`} className="btn btn-ghost btn-sm">
+                      <IconEdit className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Custom Formulas */}
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <div>
+              <h3 className="card-title">Custom Formulas</h3>
+              <p className="card-description">Advanced pricing for custom orders</p>
+            </div>
+            <Link href="/admin/pricing/formulas/new" className="btn btn-primary btn-sm">
+              <IconPlus className="w-4 h-4" />
+              Add Formula
+            </Link>
+          </div>
+
+          {customFormulas.length === 0 ? (
+            <div className="empty-state py-8">
+              <div className="empty-state-icon">
+                <IconPricing className="w-6 h-6" />
+              </div>
+              <p className="empty-state-title text-sm">No custom formulas</p>
+              <p className="empty-state-description text-xs">Create formulas for custom curtain orders</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border)]">
+              {customFormulas.map((formula) => (
+                <div key={formula.id} className="px-6 py-4 hover:bg-[var(--background)] transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-[var(--foreground)] truncate">
+                        {(formula.products as { name?: string })?.name || 'Unknown Product'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-[var(--muted)]">
+                        <div>Sewing: ${Number(formula.sewing_cost_per_m).toFixed(2)}/m</div>
+                        <div>Accessory: ${Number(formula.accessory_cost_per_m).toFixed(2)}/m</div>
+                        <div>Fullness: {Number(formula.fullness_ratio).toFixed(1)}x</div>
+                        <div>Wastage: {Number(formula.wastage_ratio * 100).toFixed(0)}%</div>
+                      </div>
+                    </div>
+                    <Link href={`/admin/pricing/formulas/${formula.id}/edit`} className="btn btn-ghost btn-sm">
+                      <IconEdit className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      <div className="overflow-auto border rounded bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 text-left">Product</th>
-              <th className="px-3 py-2 text-left">Pricing Type</th>
-              <th className="px-3 py-2 text-left">Base Price</th>
-              <th className="px-3 py-2 text-left">Currency</th>
-              <th className="px-3 py-2 text-left">Min Qty</th>
-              <th className="px-3 py-2 text-left">Step</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((r: any) => (
-              <tr key={r.id} className="border-t">
-                <td className="px-3 py-2">{r.product?.title || r.product_id}</td>
-                <td className="px-3 py-2">{r.pricing_type}</td>
-                <td className="px-3 py-2">{r.base_price}</td>
-                <td className="px-3 py-2">{r.currency}</td>
-                <td className="px-3 py-2">{r.min_quantity}</td>
-                <td className="px-3 py-2">{r.step}</td>
-              </tr>
-            ))}
-            {rules.length === 0 && (
-              <tr>
-                <td className="px-3 py-4 text-muted-foreground" colSpan={6}>
-                  Kayıt yok. /api/admin/pricing-rules üzerinden ekleyebilirsiniz.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="pt-4">
-        <h2 className="text-xl font-semibold">Custom Pricing (Curtains)</h2>
-        <p className="text-sm text-muted-foreground">
-          Perde için formül: metraj hesabı + dikim + aksesuar + fire. Ürün sales_model=custom olmalı.
-        </p>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <div className="text-sm font-semibold">Custom Formula Ekle</div>
-          {formulas[0]?.product_id ? (
-            <CustomFormulaForm productId={formulas[0].product_id} />
-          ) : (
-            <div className="text-xs text-muted-foreground">Örnek: product_id girilmiş bir ürün yok; form için product id lazım.</div>
-          )}
+      {/* Products without pricing */}
+      {products.length > 0 && pricingRules.length === 0 && (
+        <div className="card bg-amber-50 border-amber-200">
+          <div className="card-body">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <IconPricing className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-amber-900">Set up pricing</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  You have {products.length} products without pricing rules. Add pricing rules to enable sales.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div className="overflow-auto border rounded bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 text-left">Product</th>
-              <th className="px-3 py-2 text-left">Sewing</th>
-              <th className="px-3 py-2 text-left">Accessory</th>
-              <th className="px-3 py-2 text-left">Wastage</th>
-              <th className="px-3 py-2 text-left">Fullness</th>
-              <th className="px-3 py-2 text-left">Currency</th>
-            </tr>
-          </thead>
-          <tbody>
-            {formulas.map((f: any) => (
-              <tr key={f.id} className="border-t">
-                <td className="px-3 py-2">{f.product?.title || f.product_id}</td>
-                <td className="px-3 py-2">{f.sewing_cost}</td>
-                <td className="px-3 py-2">{f.accessory_cost}</td>
-                <td className="px-3 py-2">{f.wastage_ratio}</td>
-                <td className="px-3 py-2">{f.fullness_ratio_default}</td>
-                <td className="px-3 py-2">{f.currency}</td>
-              </tr>
-            ))}
-            {formulas.length === 0 && (
-              <tr>
-                <td className="px-3 py-4 text-muted-foreground" colSpan={6}>
-                  Kayıt yok. /api/admin/custom-pricing üzerinden ekleyebilirsiniz.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      )}
     </div>
   );
 }

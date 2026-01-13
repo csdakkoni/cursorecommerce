@@ -1,69 +1,110 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
-  const supabase = createSupabaseBrowserClient();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  async function onSubmit(e: FormEvent) {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
+    setError('');
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+
+      router.push('/admin');
+      router.refresh();
+    } catch {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    router.push('/admin');
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form onSubmit={onSubmit} className="w-full max-w-sm bg-white border rounded p-6 space-y-4 shadow-sm">
-        <div>
-          <h1 className="text-xl font-semibold">Giriş</h1>
-          <p className="text-sm text-muted-foreground">Admin için Supabase kullanıcı girişi</p>
+    <div className="min-h-screen bg-[var(--sidebar-bg)] flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-2xl">G</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white">Welcome back</h1>
+          <p className="text-slate-400 mt-2">Sign in to access the admin panel</p>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">E-posta</label>
-          <input
-            type="email"
-            className="input w-full"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <form onSubmit={handleLogin} className="space-y-5">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="label">Email address</label>
+              <input
+                type="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@example.com"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="label">Password</label>
+              <input
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary w-full py-3"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </form>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Şifre</label>
-          <input
-            type="password"
-            className="input w-full"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 rounded bg-black text-white text-sm font-semibold"
-        >
-          {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
-        </button>
-        <p className="text-xs text-muted-foreground">
-          Kullanıcının user_metadata.role = ADMIN olduğundan emin olun (Supabase Studio &gt; Auth &gt; Users).
+
+        {/* Footer */}
+        <p className="text-center text-slate-500 text-sm mt-6">
+          Grohn Admin Panel • Protected Area
         </p>
-      </form>
+      </div>
     </div>
   );
 }

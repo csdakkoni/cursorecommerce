@@ -1,87 +1,142 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { IconEdit, IconTrash } from '@/components/ui/icons';
 
-type Props = {
+interface Props {
   id: string;
-  free_threshold: number;
-  flat_cost: number;
-  currency: string;
-  carrier: string | null;
-};
+  provider: string;
+  baseRate: number;
+  perKgRate: number;
+}
 
-export function ShippingProfileRowActions({ id, free_threshold, flat_cost, currency, carrier }: Props) {
-  const [form, setForm] = useState({
-    free_threshold: free_threshold ?? 0,
-    flat_cost: flat_cost ?? 0,
-    currency: currency ?? 'USD',
-    carrier: carrier ?? ''
-  });
+export function ShippingProfileRowActions({ id, provider, baseRate, perKgRate }: Props) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
+  const [form, setForm] = useState({
+    provider,
+    base_rate: String(baseRate),
+    per_kg_rate: String(perKgRate),
+  });
 
-  async function save() {
+  const handleSave = async () => {
     setLoading(true);
-    setError(null);
-    setOk(false);
-    const res = await fetch('/api/admin/shipping-profiles', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id,
-        free_threshold: Number(form.free_threshold),
-        flat_cost: Number(form.flat_cost),
-        currency: form.currency,
-        carrier: form.carrier
-      })
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Hata');
-    } else {
-      setOk(true);
+    try {
+      const res = await fetch('/api/admin/shipping-profiles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          provider: form.provider,
+          base_rate: parseFloat(form.base_rate),
+          per_kg_rate: parseFloat(form.per_kg_rate),
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to update');
+        return;
+      }
+      
+      setEditing(false);
+      router.refresh();
+    } catch {
+      alert('Error updating shipping profile');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this shipping profile?')) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/shipping-profiles?id=${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete');
+        return;
+      }
+      
+      router.refresh();
+    } catch {
+      alert('Error deleting shipping profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={form.provider}
+          onChange={(e) => setForm({ ...form, provider: e.target.value })}
+          className="input w-20 text-xs py-1"
+          disabled={loading}
+          placeholder="Provider"
+        />
+        <input
+          type="number"
+          value={form.base_rate}
+          onChange={(e) => setForm({ ...form, base_rate: e.target.value })}
+          className="input w-16 text-xs py-1"
+          disabled={loading}
+          step="0.01"
+          placeholder="Base"
+        />
+        <input
+          type="number"
+          value={form.per_kg_rate}
+          onChange={(e) => setForm({ ...form, per_kg_rate: e.target.value })}
+          className="input w-16 text-xs py-1"
+          disabled={loading}
+          step="0.01"
+          placeholder="/kg"
+        />
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
+        >
+          {loading ? '...' : 'Save'}
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          disabled={loading}
+          className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="flex items-center gap-1 text-xs">
-      <input
-        className="input h-8 w-20"
-        type="number"
-        value={form.free_threshold}
-        onChange={(e) => setForm((f) => ({ ...f, free_threshold: Number(e.target.value) }))}
-        title="Free threshold"
-      />
-      <input
-        className="input h-8 w-20"
-        type="number"
-        value={form.flat_cost}
-        onChange={(e) => setForm((f) => ({ ...f, flat_cost: Number(e.target.value) }))}
-        title="Flat cost"
-      />
-      <input
-        className="input h-8 w-16"
-        value={form.currency}
-        onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-        title="Currency"
-      />
-      <input
-        className="input h-8 w-24"
-        value={form.carrier}
-        onChange={(e) => setForm((f) => ({ ...f, carrier: e.target.value }))}
-        placeholder="Carrier"
-      />
+    <div className="flex items-center gap-1">
       <button
-        className="px-2 py-1 rounded bg-black text-white"
-        onClick={save}
-        disabled={loading}
+        onClick={() => setEditing(true)}
+        className="btn btn-ghost btn-sm"
+        title="Edit"
       >
-        {loading ? '...' : 'Kaydet'}
+        <IconEdit className="w-4 h-4" />
       </button>
-      {ok && <span className="text-green-600">OK</span>}
-      {error && <span className="text-red-600">{error}</span>}
+      <button
+        onClick={handleDelete}
+        disabled={loading}
+        className="btn btn-ghost btn-sm text-red-500 hover:text-red-600"
+        title="Delete"
+      >
+        <IconTrash className="w-4 h-4" />
+      </button>
     </div>
   );
 }
